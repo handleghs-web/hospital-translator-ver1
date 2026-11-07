@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <title>병원용 양방향 동시통역</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .rotate-180-custom { transform: rotate(180deg); }
+  </style>
+</head>
+<body class="bg-slate-100 h-screen w-screen flex flex-col overflow-hidden font-sans select-none m-0 p-0">
+
+  <!-- 상단 헤더 -->
+  <header class="bg-white border-b px-6 py-3 flex justify-between items-center shadow-sm flex-shrink-0 z-10">
+    <div class="flex items-center space-x-4">
+      <!-- 로고 -->
+      <div id="hospitalLogoContainer" class="w-11 h-11 flex items-center justify-center bg-slate-200 rounded-lg overflow-hidden border flex-shrink-0">
+        <span id="logoPlaceholder" class="text-xs text-slate-500 font-bold">LOGO</span>
+        <img id="hospitalLogo" class="hidden w-full h-full object-contain" alt="Hospital Logo">
+      </div>
+      <!-- 병원명 -->
+      <div>
+        <h1 id="hospitalNameDisplay" class="text-xl font-bold text-slate-800">OOOO병원 진료통역</h1>
+        <p class="text-xs text-slate-500">양방향 실시간 메디컬 통역 시스템</p>
+      </div>
+
+      <!-- 상단 병원명 옆 환자 언어 선택 영역 -->
+      <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-4 py-2 rounded-xl ml-4">
+        <label for="patientLangSelect" class="text-base font-extrabold text-emerald-900 whitespace-nowrap">🌐 환자 언어:</label>
+        <select id="patientLangSelect" onchange="changePatientLang()" class="text-base font-bold border-2 border-emerald-500 rounded-lg px-3 py-1.5 bg-white text-slate-800 shadow-sm outline-none cursor-pointer">
+          <option value="en-US">English (영어)</option>
+          <option value="vi-VN">Tiếng Việt (베트남어)</option>
+          <option value="zh-CN">中文 (중국어)</option>
+          <option value="ru-RU">Русский (러시아어)</option>
+          <option value="th-TH">ไทย (태국어)</option>
+          <option value="ja-JP">日本語 (일본어)</option>
+          <option value="mn-MN">Mongolian (몽골어)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 우측 제어 버튼 (설정 및 대화 비우기) -->
+    <div class="flex items-center gap-2">
+      <button onclick="clearChatOnly()" class="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 transition">
+        🧹 대화 비우기 (다음 환자)
+      </button>
+      <button onclick="toggleSettingsModal()" class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs flex items-center gap-1 shadow">
+        ⚙️ 병원 및 API 설정
+      </button>
+    </div>
+  </header>
+
+  <!-- 메인 2등분 UI (grid 레이아웃 강제 고정) -->
+  <main class="flex-1 grid grid-cols-2 gap-4 p-4 w-full h-full overflow-hidden" style="height: calc(100vh - 70px);">
+    
+    <!-- [의료진 영역] (한국어) -->
+    <section class="bg-white rounded-2xl shadow-md p-6 flex flex-col justify-between border-2 border-blue-500 h-full overflow-hidden">
+      <div class="flex flex-col h-full overflow-hidden">
+        
+        <div class="flex justify-between items-center mb-3 border-b pb-3 flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full">의료진 (한국어)</span>
+            <span id="doctorStatus" class="text-xs font-semibold text-slate-400">대기 중</span>
+          </div>
+
+          <!-- 의료진 마이크 버튼 -->
+          <button id="btnDoctorSpeak" onclick="toggleSpeech('ko-KR', 'doctor')" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-base rounded-xl shadow-md transition flex items-center gap-2 flex-shrink-0">
+            <span id="iconDoctor">🎙️</span> <span id="textDoctor">의사 말하기</span>
+          </button>
+        </div>
+        
+        <!-- 대화 출력 박스 -->
+        <div id="doctorBox" class="flex-1 overflow-y-auto p-4 bg-slate-50 rounded-xl text-lg text-slate-800 font-medium whitespace-pre-line leading-relaxed space-y-3">
+          <p class="text-slate-400 text-base italic">상단의 마이크 버튼을 누르고 말씀하세요.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- [환자 영역] (다국어/회전 기능) -->
+    <section id="patientSection" class="bg-white rounded-2xl shadow-md p-6 flex flex-col justify-between border-2 border-emerald-500 transition-transform duration-300 h-full overflow-hidden">
+      <div class="flex flex-col h-full overflow-hidden">
+        
+        <div class="flex justify-between items-center mb-3 border-b pb-3 flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-full">환자 (Patient)</span>
+            <button onclick="toggleFlipPatientScreen()" class="text-xs bg-slate-200 px-2.5 py-1.5 rounded-lg hover:bg-slate-300 font-bold text-slate-700">🔄 180° 회전</button>
+          </div>
+
+          <!-- 환자 마이크 버튼 -->
+          <button id="btnPatientSpeak" onclick="toggleSpeech(document.getElementById('patientLangSelect').value, 'patient')" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-base rounded-xl shadow-md transition flex items-center gap-2 flex-shrink-0">
+            <span id="iconPatient">🎙️</span> <span id="textPatient">환자 말하기 (Speak)</span>
+          </button>
+        </div>
+        
+        <!-- 대화 출력 박스 -->
+        <div id="patientBox" class="flex-1 overflow-y-auto p-4 bg-slate-50 rounded-xl text-xl text-slate-800 font-bold whitespace-pre-line leading-relaxed space-y-3">
+          <p class="text-slate-400 text-base italic font-normal">Please press the button and speak.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 설정 모달 -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl p-6 w-[480px] shadow-2xl space-y-5">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-lg font-bold text-slate-800">🏥 병원 브랜딩 & API 설정</h3>
+        <button onclick="toggleSettingsModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+      </div>
+      
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">병원명</label>
+        <input type="text" id="inputHospitalName" placeholder="예: 천안우리병원" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">병원 로고 이미지</label>
+        <input type="file" id="inputHospitalLogo" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">Gemini API Key (의료 전문 번역용)</label>
+        <input type="password" id="inputApiKey" placeholder="AI Studio API Key 입력" class="w-full border rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        <p class="text-[11px] text-slate-400 mt-1">API Key를 입력하지 않으면 기본 웹 무료 번역 모드로 동작합니다.</p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t">
+        <button onclick="toggleSettingsModal()" class="px-4 py-2 bg-slate-200 rounded-lg text-sm font-bold text-slate-700">취소</button>
+        <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeRecognition = null;
+    let isListening = false;
+    let currentSpeaker = null;
+
+    window.onload = function() {
+      const savedName = localStorage.getItem('hospitalName');
+      const savedLogo = localStorage.getItem('hospitalLogo');
+      const savedKey = localStorage.getItem('geminiApiKey');
+      
+      if (savedName) {
+        document.getElementById('hospitalNameDisplay').innerText = savedName;
+        document.getElementById('inputHospitalName').value = savedName;
+      }
+      if (savedLogo) applyLogoImage(savedLogo);
+      if (savedKey) document.getElementById('inputApiKey').value = savedKey;
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
+      }
+    };
+
+    function saveSettings() {
+      const name = document.getElementById('inputHospitalName').value;
+      const logoFile = document.getElementById('inputHospitalLogo').files[0];
+      const apiKey = document.getElementById('inputApiKey').value;
+
+      if (name) {
+        localStorage.setItem('hospitalName', name);
+        document.getElementById('hospitalNameDisplay').innerText = name;
+      }
+      if (apiKey !== undefined) {
+        localStorage.setItem('geminiApiKey', apiKey.trim());
+      }
+      if (logoFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          localStorage.setItem('hospitalLogo', e.target.result);
+          applyLogoImage(e.target.result);
+        };
+        reader.readAsDataURL(logoFile);
+      }
+      toggleSettingsModal();
+    }
+
+    function applyLogoImage(src) {
+      const logoImg = document.getElementById('hospitalLogo');
+      const placeholder = document.getElementById('logoPlaceholder');
+      logoImg.src = src;
+      logoImg.classList.remove('hidden');
+      placeholder.classList.add('hidden');
+    }
+
+    function toggleSettingsModal() {
+      document.getElementById('settingsModal').classList.toggle('hidden');
+    }
+
+    function toggleFlipPatientScreen() {
+      document.getElementById('patientSection').classList.toggle('rotate-180-custom');
+    }
+
+    function changePatientLang() {
+      const lang = document.getElementById('patientLangSelect').value;
+      const patientBox = document.getElementById('patientBox');
+      const prompts = {
+        'en-US': 'Please press the button and speak.',
+        'vi-VN': 'Vui lòng nhấn nút và nói.',
+        'zh-CN': '请按按钮说话。',
+        'ru-RU': 'Пожалуйста, нажмите кнопку и говорите.',
+        'th-TH': 'กรุณากดปุ่มแล้วพูด',
+        'ja-JP': 'ボタンを押してお話しください。',
+        'mn-MN': 'Товчийг дараад ярина уу.'
+      };
+      patientBox.innerHTML = `<p class="text-slate-400 text-base italic font-normal">${prompts[lang] || 'Please speak.'}</p>`;
+    }
+
+    function clearChatOnly() {
+      document.getElementById('doctorBox').innerHTML = '<p class="text-slate-400 text-base italic">상단의 마이크 버튼을 누르고 말씀하세요.</p>';
+      changePatientLang();
+    }
+
+    function toggleSpeech(lang, speaker) {
+      if (isListening) {
+        stopSpeech();
+        if (currentSpeaker === speaker) return;
+      }
+      startSpeech(lang, speaker);
+    }
+
+    function startSpeech(lang, speaker) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('이 브라우저는 음성 인식을 지원하지 않습니다. 구글 크롬(Chrome) 브라우저를 사용해 주세요.');
+        return;
+      }
+
+      activeRecognition = new SpeechRecognition();
+      activeRecognition.lang = lang;
+      activeRecognition.interimResults = false;
+      activeRecognition.continuous = false;
+
+      currentSpeaker = speaker;
+      isListening = true;
+
+      const btn = speaker === 'doctor' ? document.getElementById('btnDoctorSpeak') : document.getElementById('btnPatientSpeak');
+      btn.classList.add('animate-pulse', 'bg-red-600');
+      btn.classList.remove('bg-blue-600', 'bg-emerald-600');
+      
+      if (speaker === 'doctor') document.getElementById('textDoctor').innerText = "음성 듣는 중...";
+      else document.getElementById('textPatient').innerText = "Listening...";
+
+      activeRecognition.onresult = async function(event) {
+        const transcript = event.results[0][0].transcript;
+        appendSpeechResult(speaker, transcript);
+        stopSpeech();
+        await translateText(transcript, speaker);
+      };
+
+      activeRecognition.onerror = function(event) {
+        console.error('Speech error:', event.error);
+        stopSpeech();
+      };
+
+      activeRecognition.onend = function() {
+        stopSpeech();
+      };
+
+      activeRecognition.start();
+    }
+
+    function stopSpeech() {
+      if (activeRecognition) {
+        activeRecognition.stop();
+        activeRecognition = null;
+      }
+      isListening = false;
+      
+      const btnDoctor = document.getElementById('btnDoctorSpeak');
+      btnDoctor.classList.remove('animate-pulse', 'bg-red-600');
+      btnDoctor.classList.add('bg-blue-600');
+      document.getElementById('textDoctor').innerText = "의사 말하기";
+
+      const btnPatient = document.getElementById('btnPatientSpeak');
+      btnPatient.classList.remove('animate-pulse', 'bg-red-600');
+      btnPatient.classList.add('bg-emerald-600');
+      document.getElementById('textPatient').innerText = "환자 말하기 (Speak)";
+    }
+
+    function appendSpeechResult(speaker, text) {
+      const targetBox = speaker === 'doctor' ? document.getElementById('doctorBox') : document.getElementById('patientBox');
+      if (targetBox.querySelector('p')) targetBox.innerHTML = '';
+
+      const msgDiv = document.createElement('div');
+      msgDiv.className = "p-3 rounded-xl bg-white shadow-sm border border-slate-200 my-2";
+      msgDiv.innerHTML = `<span class="text-xs text-slate-400 font-bold block mb-1">${speaker === 'doctor' ? '의사 (원문)' : '환자 (원문)'}</span>${text}`;
+      targetBox.appendChild(msgDiv);
+      targetBox.scrollTop = targetBox.scrollHeight;
+    }
+
+    async function translateText(text, speaker) {
+      const targetBox = speaker === 'doctor' ? document.getElementById('patientBox') : document.getElementById('doctorBox');
+      if (targetBox.querySelector('p')) targetBox.innerHTML = '';
+
+      const targetLangSelect = document.getElementById('patientLangSelect');
+      const targetLang = speaker === 'doctor' ? targetLangSelect.value : 'ko-KR';
+
+      const transDiv = document.createElement('div');
+      transDiv.className = "p-3 rounded-xl bg-blue-50 border border-blue-200 my-2 shadow-sm";
+      transDiv.innerHTML = `<span class="text-xs text-blue-600 font-bold block mb-1">번역중...</span><span class="animate-pulse">...</span>`;
+      targetBox.appendChild(transDiv);
+      targetBox.scrollTop = targetBox.scrollHeight;
+
+      const apiKey = localStorage.getItem('geminiApiKey');
+
+      try {
+        let translatedText = "";
+        if (apiKey && apiKey.length > 5) {
+          translatedText = await translateWithGemini(text, targetLang, apiKey);
+        } else {
+          translatedText = await translateWithFreeApi(text, targetLang);
+        }
+
+        transDiv.className = "p-3 rounded-xl bg-emerald-50 border border-emerald-200 my-2 shadow-sm text-slate-900 font-bold";
+        transDiv.innerHTML = `<span class="text-xs text-emerald-700 font-bold block mb-1">${speaker === 'doctor' ? '번역본 (Translation)' : '의료진 전달용 번역'}</span>${translatedText}`;
+      } catch (err) {
+        transDiv.className = "p-3 rounded-xl bg-red-50 border border-red-200 my-2 text-red-600 text-sm";
+        transDiv.innerHTML = `번역 실패: ${err.message}`;
+      }
+      targetBox.scrollTop = targetBox.scrollHeight;
+    }
+
+    async function translateWithGemini(text, targetLang, apiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`;
+      const prompt = `You are a professional medical interpreter in a hospital clinic. Translate the following text into target language code ${targetLang}. Keep medical terms precise, accurate, and concise. Only output the translation text without any explanations.\n\nText: ${text}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+
+      const data = await response.json();
+      if (data.candidates && data.candidates[0].content.parts[0].text) {
+        return data.candidates[0].content.parts[0].text.trim();
+      } else {
+        console.error('Gemini API Error Response:', data);
+        throw new Error(data.error?.message || 'Gemini API 응답 오류 (키 확인 필요)');
+      }
+    }
+
+    async function translateWithFreeApi(text, targetLang) {
+      const targetCode = targetLang.split('-')[0];
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetCode}&dt=t&q=${encodeURIComponent(text)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data[0].map(item => item[0]).join('');
+    }
+  </script>
+</body>
+</html>
